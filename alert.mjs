@@ -23,6 +23,14 @@ async function email(subject, html) {
   console.log('email', r.status, await r.text());
 }
 
+async function page(title, message) {
+  const token = process.env.PUSHOVER_APP_TOKEN, user = process.env.PUSHOVER_USER_KEY;
+  if (!token || !user) return;
+  const r = await fetch('https://api.pushover.net/1/messages.json', { method: 'POST',
+    body: new URLSearchParams({ token, user, title, message: message.slice(0, 1000), priority: '2', retry: '300', expire: '3600', url: runUrl, url_title: 'Run' }) });
+  console.log('page', r.status);
+}
+
 const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 const summary = [`${results.length - failed.length}/${results.length} product+device checks passed.`, ...failed.map((f) => `- **${f.product}** on ${f.device} — stuck at *${f.step}*: ${f.detail}`),
   ...(flaky.length ? ['', `Passed on retry (watch): ${flaky.map((f) => `${f.product}/${f.device}`).join(', ')}`] : [])].join('\n');
@@ -33,6 +41,7 @@ if (failed.length) {
   fs.writeFileSync('/tmp/body.md', body);
   if (!open) {
     sh(`gh issue create --title "Robot shopper: shoppers can't reach the cart" --label ${LABEL} --body-file /tmp/body.md`);
+    await page("Checkout broken", failed.map((f) => `${f.product}/${f.device}: ${f.step}`).join('\n'));
     await email(`🚨 Checkout broken: ${failed.map((f) => f.product).filter((v, i, a) => a.indexOf(v) === i).join(', ')}`,
       `<p>The robot shopper could not get these to the cart (failed twice in a row):</p><ul>${failed.map((f) => `<li><b>${esc(f.product)}</b> on ${f.device}: stuck at <i>${esc(f.step)}</i> — ${esc(f.detail)}</li>`).join('')}</ul><p><a href="${runUrl}">Run + screenshots</a></p>`);
   } else {

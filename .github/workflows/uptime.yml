@@ -92,6 +92,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Open, update or close the SITE DOWN issue
+        id: issue
         uses: actions/github-script@v7
         with:
           script: |
@@ -154,11 +155,28 @@ jobs:
                 ...context.repo, title: TITLE, body, labels: [LABEL],
               });
               core.info(`Opened #${created.number}.`);
+              core.setOutput('newly', 'true');
             }
             core.setFailed('Uptime check failed — see the tracking issue.');
 
+      # Email + page ONCE when an outage starts (the issue is newly opened),
+      # not every 5 minutes while it lasts. Page only if a customer-facing
+      # site is down; a stale cron alone (health-crons) is email-only.
+      - name: Page phone (storefront or design center down)
+        if: always() && needs.check.outputs.ok != 'true' && steps.issue.outputs.newly == 'true' && (contains(needs.check.outputs.summary, 'FAIL storefront') || contains(needs.check.outputs.summary, 'FAIL design-center'))
+        env:
+          PUSHOVER_APP_TOKEN: ${{ secrets.PUSHOVER_APP_TOKEN }}
+          PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
+          SUMMARY: ${{ needs.check.outputs.summary }}
+        run: |
+          [ -z "$PUSHOVER_APP_TOKEN" ] && { echo "no pushover secrets"; exit 0; }
+          curl -s -o /dev/null -w "pushover http=%{http_code}\n" https://api.pushover.net/1/messages.json \
+            --form-string "token=$PUSHOVER_APP_TOKEN" --form-string "user=$PUSHOVER_USER_KEY" \
+            --form-string "title=SITE DOWN" --form-string "message=$SUMMARY" \
+            --form-string "priority=2" --form-string "retry=300" --form-string "expire=3600"
+
       - name: Email hello@thelasercraft.co via Resend (only if RESEND_API_KEY is configured)
-        if: needs.check.outputs.ok != 'true'
+        if: always() && needs.check.outputs.ok != 'true' && steps.issue.outputs.newly == 'true'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SUMMARY: ${{ needs.check.outputs.summary }}
