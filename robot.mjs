@@ -6,7 +6,10 @@
 import { chromium, webkit, devices } from 'playwright';
 import fs from 'node:fs';
 
-const DC = 'https://design.thelasercraft.co';
+// Point at a Vercel preview build to test a change BEFORE it reaches
+// customers (ROBOT_DC_BASE + ROBOT_BYPASS, set by design-center's CI).
+const DC = (process.env.ROBOT_DC_BASE || 'https://design.thelasercraft.co').replace(/\/$/, '');
+const BYPASS = process.env.ROBOT_BYPASS || '';
 const STORE = 'https://www.thelasercraft.co';
 const TOKEN = process.env.ROBOT_TOKEN || '';
 console.log(`robot cookie: ${TOKEN ? 'set (' + TOKEN.length + ' chars)' : 'MISSING — designs will not be tagged or cleaned up'}`);
@@ -85,10 +88,15 @@ async function runOne(browsers, p, pi, dev) {
   const browser = dev === 'phone' ? browsers.webkit : browsers.chromium;
   const ctx = await browser.newContext(dev === 'phone' ? { ...devices['iPhone 13'] } : { viewport: { width: 1366, height: 768 } });
   if (TOKEN) await ctx.addCookies([{ name: 'tlc_robot', value: TOKEN, domain: 'design.thelasercraft.co', path: '/', secure: true, sameSite: 'Lax' }]);
+  const dcHost = new URL(DC).hostname;
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url());
     if (u.protocol === 'data:' || u.protocol === 'blob:') return route.continue();
     if (!ALLOW_HOSTS.some((re) => re.test(u.hostname)) || BLOCK_PATHS.test(u.pathname)) return route.abort();
+    // Vercel preview builds sit behind login; this header is the official way past it.
+    if (BYPASS && u.hostname === dcHost) {
+      return route.continue({ headers: { ...route.request().headers(), 'x-vercel-protection-bypass': BYPASS, 'x-vercel-set-bypass-cookie': 'true' } });
+    }
     return route.continue();
   });
   const page = await ctx.newPage();
@@ -97,7 +105,7 @@ async function runOne(browsers, p, pi, dev) {
   page.on('response', (r) => { try { const u = new URL(r.url()); if (r.status() >= 400 && /thelasercraft\.co|shopify/.test(u.hostname) && !BLOCK_PATHS.test(u.pathname) && !/private_access_tokens/.test(u.pathname)) bad.push(`${r.status()} ${r.request().method()} ${u.hostname}${u.pathname.slice(0, 70)}`); } catch {} });
   let step = 'open';
   try {
-    if (sc.entry === 'page' && p.page) { step = 'storefront page → design button'; await enterFromPage(page, p); }
+    if (sc.entry === 'page' && p.page && !BYPASS) { step = 'storefront page → design button'; await enterFromPage(page, p); }
     else { step = 'open design center'; const r = await page.goto(dcUrl(p), { waitUntil: 'domcontentloaded', timeout: 45000 }); if (!r || r.status() >= 400) throw new Error(`HTTP ${r?.status()}`); }
     res.entry = page.url().replace(/[?#].*/, '');
     step = 'load editor';

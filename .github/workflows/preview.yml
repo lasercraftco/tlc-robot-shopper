@@ -1,0 +1,43 @@
+name: Robot shopper (preview)
+
+# Runs the same checks against a design-center PREVIEW build, so a change is
+# proven to still reach the cart before it goes live. Started by the
+# design-center repo (repository_dispatch) once Vercel finishes its preview.
+on:
+  repository_dispatch:
+    types: [preview-ready]
+  workflow_dispatch:
+    inputs:
+      dc_url:
+        description: Preview URL of the design center
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.client_payload.sha || inputs.dc_url }}
+  cancel-in-progress: true
+
+jobs:
+  shop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: pip install -q pillow pillow-heif && python3 gen-art.py
+      - name: Shop the preview build
+        env:
+          ROBOT_TOKEN: ${{ secrets.ROBOT_TOKEN }}
+          ROBOT_BYPASS: ${{ secrets.VERCEL_BYPASS_SECRET }}
+          ROBOT_DC_BASE: ${{ github.event.client_payload.dc_url || inputs.dc_url }}
+          ROBOT_CONCURRENCY: 4
+          ROBOT_SET: core
+        run: node robot.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: preview-screenshots, path: out/, retention-days: 7, if-no-files-found: ignore }
