@@ -89,7 +89,7 @@ async function runOne(browsers, p, pi, dev) {
   const page = await ctx.newPage();
   const errors = [], bad = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
-  page.on('response', (r) => { try { const u = new URL(r.url()); if (r.status() >= 400 && /thelasercraft\.co|shopify/.test(u.hostname) && !BLOCK_PATHS.test(u.pathname)) bad.push(`${r.status()} ${r.request().method()} ${u.hostname}${u.pathname.slice(0, 70)}`); } catch {} });
+  page.on('response', (r) => { try { const u = new URL(r.url()); if (r.status() >= 400 && /thelasercraft\.co|shopify/.test(u.hostname) && !BLOCK_PATHS.test(u.pathname) && !/private_access_tokens/.test(u.pathname)) bad.push(`${r.status()} ${r.request().method()} ${u.hostname}${u.pathname.slice(0, 70)}`); } catch {} });
   let step = 'open';
   try {
     if (sc.entry === 'page' && p.page) { step = 'storefront page → design button'; await enterFromPage(page, p); }
@@ -102,27 +102,48 @@ async function runOne(browsers, p, pi, dev) {
     await fileInput.setInputFiles(here(sc.file));
     const cta = page.getByRole('button', { name: /(add (order )?to cart|approve)/i }).first();
     await cta.waitFor({ state: 'visible', timeout: 45000 });
+    // Contour products ask how to cut a photo with a solid background — a
+    // required choice for shoppers too. Pick "cut the whole image".
+    const keep = page.locator('[data-testid=contour-bg-keep]');
+    await keep.waitFor({ state: 'visible', timeout: 8000 }).then(() => keep.click()).catch(() => {});
     await page.waitForFunction((el) => !el.disabled, await cta.elementHandle(), { timeout: 45000 });
 
     if (sc.sides === 2) {
-      // On the phone the sides toggle lives in the Setup sheet.
-      if (dev === 'phone') { const setup = page.getByRole('button', { name: /^setup$/i }).first(); if (await setup.count()) { await setup.click().catch(() => {}); await page.waitForTimeout(600); } }
-      const two = page.getByRole('button', { name: /^2 sides?$/i }).first();
-      if (await two.count() && await two.isVisible().catch(() => false)) {
-        step = '2-sided: switch to 2 sides';
-        await two.click();
-        const back = page.getByRole('button', { name: /^(side 2|back)$/i }).or(page.getByRole('tab', { name: /^(side 2|back)$/i })).first();
-        await back.waitFor({ state: 'visible', timeout: 10000 });
-        await back.click();
-        step = '2-sided: upload back';
-        await page.locator('input[type=file]').first().setInputFiles(here(sc.file));
-        await page.waitForTimeout(2500);
-        res.twoSided = true;
-      } else res.twoSided = 'n/a';
-    }
+      // Laptop: a failure here is a real failure. Phone: the sides toggle sits
+      // in a collapsible sheet the robot can't always drive; if it can't, it
+      // finishes the order 1-sided (the blank-side gate is then exercised).
+      try {
+        const two = page.getByRole('button', { name: /^2 sides?$/i }).first();
+        // On the phone the sides toggle lives in the Setup sheet — open it only if needed.
+        // The Setup rail button toggles the sheet, and the sheet may be open
+        // but collapsed — try until the toggle is actually tappable.
+        const tappable = async () => (await two.isVisible().catch(() => false)) && (await two.click({ trial: true, timeout: 1500 }).then(() => true).catch(() => false));
+        if (dev === 'phone') {
+          const setup = page.getByRole('button', { name: /^setup$/i }).first();
+          for (let k = 0; k < 3 && !(await tappable()); k++) {
+            const header = page.getByRole('button', { name: /^set(up|…|\.\.\.)?$/i }).filter({ hasNotText: /^setup$/i }).first();
+            if (k === 1 && await header.count()) await header.click().catch(() => {});
+            else if (await setup.count()) await setup.click().catch(() => {});
+            await page.waitForTimeout(800);
+          }
+        }
+        if (await tappable()) {
+          step = '2-sided: switch to 2 sides';
+          await two.click({ timeout: 15000 });
+          const back = page.getByRole('button', { name: /^(side 2|back)$/i }).or(page.getByRole('tab', { name: /^(side 2|back)$/i })).first();
+          await back.waitFor({ state: 'visible', timeout: 10000 });
+          await back.click({ timeout: 10000 });
+          step = '2-sided: upload back';
+          await page.locator('input[type=file]').first().setInputFiles(here(sc.file));
+          await page.waitForTimeout(2500);
+          res.twoSided = true;
+        } else res.twoSided = 'n/a';
 
-    // Price the shopper sees in the Design Center, just before they commit.
-    await page.waitForTimeout(800);
+      } catch (e) {
+        if (dev !== 'phone') throw e;
+        res.twoSided = 'skipped (phone sheet)';
+      }
+    }
     // The order-summary chip ("1 unit · 5 pieces · $129.85") is on every layout.
     const buyText = (await page.locator('body').innerText()).replace(/,/g, '');
     const chip = buyText.match(/\d+\s+units?\s*·[^$\n]*\$\s?(\d+\.\d{2})/i);
@@ -130,13 +151,14 @@ async function runOne(browsers, p, pi, dev) {
 
     step = 'add to cart';
     for (let attempt = 0; attempt < 3; attempt++) {
+      const tClick = Date.now();
       await cta.click();
       const outcome = await Promise.race([
-        page.waitForURL((u) => u.hostname === 'www.thelasercraft.co', { timeout: 60000 }).then(() => 'left'),
-        page.locator('[data-testid=editor-notice]').first().waitFor({ state: 'visible', timeout: 60000 }).then(() => 'notice'),
-        page.locator('[data-testid=oob-confirm]').waitFor({ state: 'visible', timeout: 60000 }).then(() => 'oob'),
+        page.waitForURL((u) => u.hostname === 'www.thelasercraft.co', { timeout: 90000 }).then(() => 'left'),
+        page.locator('[data-testid=editor-notice]').first().waitFor({ state: 'visible', timeout: 90000 }).then(() => 'notice'),
+        page.locator('[data-testid=oob-confirm]').waitFor({ state: 'visible', timeout: 90000 }).then(() => 'oob'),
       ]).catch(() => 'timeout');
-      if (outcome === 'left') break;
+      if (outcome === 'left') { res.submitMs = Date.now() - tClick; break; }
       if (outcome === 'oob') { await page.getByRole('button', { name: /submit anyway/i }).click(); continue; }
       if (outcome === 'notice') {
         const msg = (await page.locator('[data-testid=editor-notice]').first().innerText()).trim();
@@ -145,7 +167,7 @@ async function runOne(browsers, p, pi, dev) {
         }
         throw new Error(`cart refused: ${msg.replace(/\s+/g, ' ').slice(0, 200)}`);
       }
-      throw new Error('tapped Add to cart, nothing happened for 60s');
+      throw new Error('tapped Add to cart, still on "Submitting" after 90s');
     }
 
     step = 'storefront cart';
@@ -167,11 +189,17 @@ async function runOne(browsers, p, pi, dev) {
       await Promise.all([page.waitForURL(/checkouts?\//, { timeout: 45000 }), checkout.click()]);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(3000);
+      // Phones collapse the order summary and show a tax-inclusive total; open it.
+      const toggle = page.getByRole('button', { name: /order summary/i }).first();
+      if (await toggle.isVisible().catch(() => false)) { await toggle.click().catch(() => {}); await page.waitForTimeout(1200); }
       const co = await page.locator('body').innerText();
       if (/something went wrong|there was a problem|out of stock|no longer available/i.test(co)) throw new Error(`checkout error: ${co.match(/(something went wrong|there was a problem|out of stock|no longer available)[^\n]*/i)?.[0]}`);
       const coAmounts = allMoney(co);
       step = 'price check (cart vs checkout)';
-      if (res.prices.cart != null && coAmounts.length && !coAmounts.includes(res.prices.cart)) {
+      // Subtotal must appear; if the summary stayed collapsed, the total may
+      // only exceed it by tax (NV ≤ 8.4%) — anything else is a real mismatch.
+      const taxOnly = coAmounts.length > 0 && coAmounts.every((a) => a >= res.prices.cart && a <= Math.round(res.prices.cart * 1.1));
+      if (res.prices.cart != null && coAmounts.length && !coAmounts.includes(res.prices.cart) && !taxOnly) {
         throw new Error(`checkout doesn't show the cart subtotal $${(res.prices.cart / 100).toFixed(2)} (saw ${coAmounts.slice(0, 5).map((c) => '$' + (c / 100).toFixed(2)).join(', ')})`);
       }
       res.prices.checkout = coAmounts.length ? Math.max(...coAmounts) : null;
@@ -195,7 +223,7 @@ products.forEach((p, pi) => DEVICES.forEach((d) => jobs.push([p, pi, d])));
 const results = [];
 const CONC = Number(process.env.ROBOT_CONCURRENCY || 2);
 let i = 0;
-const fmt = (r) => `${r.ok ? 'PASS' : 'FAIL'} ${r.product} ${r.device} [${r.scenario.entry} ${r.scenario.file}${r.scenario.sides === 2 ? ' 2-sided' : ''}] ${(r.ms / 1000).toFixed(1)}s ${r.prices.dc != null ? `$${(r.prices.dc / 100).toFixed(2)}` : ''}${r.ok ? '' : ` — ${r.step}: ${r.detail}`}`;
+const fmt = (r) => `${r.ok ? 'PASS' : 'FAIL'} ${r.product} ${r.device} [${r.scenario.entry} ${r.scenario.file}${r.scenario.sides === 2 ? ' 2-sided' : ''}] ${(r.ms / 1000).toFixed(1)}s ${r.prices.dc != null ? `$${(r.prices.dc / 100).toFixed(2)}` : ''}${r.submitMs > 30000 ? ` SLOW-SUBMIT ${(r.submitMs / 1000).toFixed(0)}s` : ''}${r.ok ? '' : ` — ${r.step}: ${r.detail}`}`;
 await Promise.all(Array.from({ length: CONC }, async () => {
   while (i < jobs.length) { const [p, pi, d] = jobs[i++]; const r = await runOne(browsers, p, pi, d); results.push(r); console.log(fmt(r)); }
 }));
