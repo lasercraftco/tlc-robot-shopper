@@ -185,9 +185,12 @@ jobs:
             echo "RESEND_API_KEY not set as a repo secret — issue-only alert (see uptime.yml comment)."
             exit 0
           fi
+          # Only the health endpoint failing = the site is up and a background
+          # job is stale/failing. Say that, not SITE DOWN.
+          if echo "$SUMMARY" | grep -qE 'FAIL (storefront|design-center)'; then SUBJECT="SITE DOWN"; else SUBJECT="Site is up - a background job is failing (see ops digest)"; fi
           BODY=$(printf 'Uptime check failed.\n\n%s\n\nSee the pinned SITE DOWN issue for details.' "$SUMMARY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
           curl -s -X POST "https://api.resend.com/emails" \
             -H "Authorization: Bearer $RESEND_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"from\":\"The Lasercraft Co. <hello@thelasercraft.co>\",\"to\":[\"hello@thelasercraft.co\"],\"subject\":\"SITE DOWN\",\"text\":$BODY}" \
+            -d "{\"from\":\"The Lasercraft Co. <hello@thelasercraft.co>\",\"to\":[\"hello@thelasercraft.co\"],\"subject\":\"$SUBJECT\",\"text\":$BODY}" \
             -o /dev/null -w "resend http=%{http_code}\n"
