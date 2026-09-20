@@ -9,6 +9,7 @@ import fs from 'node:fs';
 const DC = 'https://design.thelasercraft.co';
 const STORE = 'https://www.thelasercraft.co';
 const TOKEN = process.env.ROBOT_TOKEN || '';
+console.log(`robot cookie: ${TOKEN ? 'set (' + TOKEN.length + ' chars)' : 'MISSING — designs will not be tagged or cleaned up'}`);
 const SET = process.env.ROBOT_SET || 'core';           // core | full
 const ONLY = process.env.ROBOT_ONLY ? process.env.ROBOT_ONLY.split(',') : null;
 const DEVICES = (process.env.ROBOT_DEVICES || 'phone,laptop').split(',');
