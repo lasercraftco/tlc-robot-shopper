@@ -38,7 +38,9 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Test artwork (jpg / heic / pdf)
+        run: pip install -q pillow pillow-heif && python3 gen-art.py
       - name: Shop
         id: shop
         continue-on-error: true

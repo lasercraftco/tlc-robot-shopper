@@ -1,30 +1,235 @@
 [
- {"type":"drinkware","style":"20oz-tumbler","color":"Black","vid":"gid://shopify/ProductVariant/47374225899746","qty":1,"core":true},
- {"type":"keychains","style":"kc-2-per-piece","color":"Black - Gloss Back","vid":"gid://shopify/ProductVariant/47857877319906","qty":10,"core":true},
- {"type":"poker-chips","style":"12-stripe-poker-chips","color":"Black","vid":"gid://shopify/ProductVariant/47524805771490","qty":1,"core":true},
- {"type":"name-badges","style":"badge-slim","color":"White Acrylic","vid":"gid://shopify/ProductVariant/47957401927906","qty":1,"core":true},
- {"type":"journals","style":"standard","color":"Teal","vid":"gid://shopify/ProductVariant/47586976006370","qty":1,"core":true},
- {"type":"pins","style":"pin-20-contour","color":"White","vid":"gid://shopify/ProductVariant/48021961343202","qty":1,"core":true},
- {"type":"luggage-tags","style":"luggage-tag","color":"Black","vid":"gid://shopify/ProductVariant/47379212009698","qty":1,"core":true},
- {"type":"metal-luggage-tags","style":"mlt-landscape","color":"White Aluminum","vid":"gid://shopify/ProductVariant/48119638327522","qty":1,"core":true},
- {"type":"ornaments","style":"orn-35","color":"Clear","vid":"gid://shopify/ProductVariant/47957399601378","qty":1,"core":true},
- {"type":"standees","style":"std-8","color":"Clear","vid":"gid://shopify/ProductVariant/48329251160290","qty":1,"core":true},
- {"type":"cake-toppers","style":"ctp-lrg","color":"Black","vid":"gid://shopify/ProductVariant/47957408678114","qty":1},
- {"type":"mousepads","style":"rectangle","color":"","vid":"gid://shopify/ProductVariant/47419998240994","qty":1},
- {"type":"bag-charms","style":"bc-4-single","color":"White - Gloss Back","vid":"gid://shopify/ProductVariant/47858736562402","qty":1},
- {"type":"golf-balls","style":"golf","color":"","vid":"gid://shopify/ProductVariant/47589924864226","qty":1},
- {"type":"name-plates","style":"np-std","color":"Clear","vid":"gid://shopify/ProductVariant/47997279928546","qty":1},
- {"type":"ping-pong-balls","style":"ping-pong","color":"","vid":"gid://shopify/ProductVariant/47590294257890","qty":1},
- {"type":"metal-business-cards","style":"mbc-25","color":"White Aluminum","vid":"gid://shopify/ProductVariant/48119638393058","qty":1},
- {"type":"drink-tags","style":"drink-tag","color":"White","vid":"gid://shopify/ProductVariant/47625315942626","qty":1},
- {"type":"magnets","style":"mag-30","color":"White","vid":"gid://shopify/ProductVariant/47957404516578","qty":1},
- {"type":"place-cards","style":"pc-arch","color":"Clear","vid":"gid://shopify/ProductVariant/47997273604322","qty":1},
- {"type":"dash-plaques","style":"dash-100","color":"White Aluminum","vid":"gid://shopify/ProductVariant/48119638556898","qty":1},
- {"type":"vinyl-stickers","style":"vs-3-100","color":"Glossy","vid":"gid://shopify/ProductVariant/47868595601634","qty":1},
- {"type":"bottle-openers","style":"leatherette","color":"Rawhide","vid":"gid://shopify/ProductVariant/47868577153250","qty":1},
- {"type":"table-numbers","style":"tn-46","color":"White","vid":"gid://shopify/ProductVariant/47997276946658","qty":1},
- {"type":"hardcover-journals","style":"custom-leatherette-hardcover-journals","color":"","vid":"gid://shopify/ProductVariant/47868613034210","qty":1},
- {"type":"coasters","style":"leatherette-coaster","color":"Light Brown","vid":"gid://shopify/ProductVariant/47868578332898","qty":1},
- {"type":"wood-keychains","style":"wk-30","color":"White Underbase","vid":"gid://shopify/ProductVariant/48285968761058","qty":1},
- {"type":"leatherette-patches","style":"small-square","color":"Ultra White (Smooth)","vid":"gid://shopify/ProductVariant/47875241705698","qty":1}
+ {
+  "type": "drinkware",
+  "style": "20oz-tumbler",
+  "color": "Black",
+  "vid": "gid://shopify/ProductVariant/47374225899746",
+  "qty": 1,
+  "core": true,
+  "page": "/products/custom-engraved-tumbler-20oz-stainless-25017",
+  "cta": "^(design now|start designing)"
+ },
+ {
+  "type": "keychains",
+  "style": "kc-2-per-piece",
+  "color": "Black - Gloss Back",
+  "vid": "gid://shopify/ProductVariant/47857877319906",
+  "qty": 10,
+  "core": true,
+  "page": "/collections/custom-keychains"
+ },
+ {
+  "type": "poker-chips",
+  "style": "12-stripe-poker-chips",
+  "color": "Black",
+  "vid": "gid://shopify/ProductVariant/47524805771490",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/poker-chips"
+ },
+ {
+  "type": "name-badges",
+  "style": "badge-slim",
+  "color": "White Acrylic",
+  "vid": "gid://shopify/ProductVariant/47957401927906",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/custom-name-badges"
+ },
+ {
+  "type": "journals",
+  "style": "standard",
+  "color": "Teal",
+  "vid": "gid://shopify/ProductVariant/47586976006370",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/custom-journals"
+ },
+ {
+  "type": "pins",
+  "style": "pin-20-contour",
+  "color": "White",
+  "vid": "gid://shopify/ProductVariant/48021961343202",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/custom-acrylic-pins"
+ },
+ {
+  "type": "luggage-tags",
+  "style": "luggage-tag",
+  "color": "Black",
+  "vid": "gid://shopify/ProductVariant/47379212009698",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/engraved-luggage-tags"
+ },
+ {
+  "type": "metal-luggage-tags",
+  "style": "mlt-landscape",
+  "color": "White Aluminum",
+  "vid": "gid://shopify/ProductVariant/48119638327522",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/metal-luggage-tags"
+ },
+ {
+  "type": "ornaments",
+  "style": "orn-35",
+  "color": "Clear",
+  "vid": "gid://shopify/ProductVariant/47957399601378",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/custom-photo-ornaments"
+ },
+ {
+  "type": "standees",
+  "style": "std-8",
+  "color": "Clear",
+  "vid": "gid://shopify/ProductVariant/48329251160290",
+  "qty": 1,
+  "core": true,
+  "page": "/collections/acrylic-photo-standees"
+ },
+ {
+  "type": "cake-toppers",
+  "style": "ctp-lrg",
+  "color": "Black",
+  "vid": "gid://shopify/ProductVariant/47957408678114",
+  "qty": 1,
+  "page": "/collections/acrylic-cake-toppers"
+ },
+ {
+  "type": "mousepads",
+  "style": "rectangle",
+  "color": "",
+  "vid": "gid://shopify/ProductVariant/47419998240994",
+  "qty": 1,
+  "page": "/collections/custom-mousepads"
+ },
+ {
+  "type": "bag-charms",
+  "style": "bc-4-single",
+  "color": "White - Gloss Back",
+  "vid": "gid://shopify/ProductVariant/47858736562402",
+  "qty": 1,
+  "page": "/collections/custom-acrylic-bag-charms"
+ },
+ {
+  "type": "golf-balls",
+  "style": "golf",
+  "color": "",
+  "vid": "gid://shopify/ProductVariant/47589924864226",
+  "qty": 1,
+  "page": "/collections/custom-golf-balls"
+ },
+ {
+  "type": "name-plates",
+  "style": "np-std",
+  "color": "Clear",
+  "vid": "gid://shopify/ProductVariant/47997279928546",
+  "qty": 1,
+  "page": "/collections/desk-name-plates"
+ },
+ {
+  "type": "ping-pong-balls",
+  "style": "ping-pong",
+  "color": "",
+  "vid": "gid://shopify/ProductVariant/47590294257890",
+  "qty": 1,
+  "page": "/collections/custom-ping-pong-balls"
+ },
+ {
+  "type": "metal-business-cards",
+  "style": "mbc-25",
+  "color": "White Aluminum",
+  "vid": "gid://shopify/ProductVariant/48119638393058",
+  "qty": 1,
+  "page": "/collections/metal-business-cards"
+ },
+ {
+  "type": "drink-tags",
+  "style": "drink-tag",
+  "color": "White",
+  "vid": "gid://shopify/ProductVariant/47625315942626",
+  "qty": 1,
+  "page": "/collections/custom-drink-tags"
+ },
+ {
+  "type": "magnets",
+  "style": "mag-30",
+  "color": "White",
+  "vid": "gid://shopify/ProductVariant/47957404516578",
+  "qty": 1,
+  "page": "/collections/custom-acrylic-magnets"
+ },
+ {
+  "type": "place-cards",
+  "style": "pc-arch",
+  "color": "Clear",
+  "vid": "gid://shopify/ProductVariant/47997273604322",
+  "qty": 1,
+  "page": "/collections/wedding-place-cards"
+ },
+ {
+  "type": "dash-plaques",
+  "style": "dash-100",
+  "color": "White Aluminum",
+  "vid": "gid://shopify/ProductVariant/48119638556898",
+  "qty": 1,
+  "page": "/collections/dash-plaques"
+ },
+ {
+  "type": "vinyl-stickers",
+  "style": "vs-3-100",
+  "color": "Glossy",
+  "vid": "gid://shopify/ProductVariant/47868595601634",
+  "qty": 1
+ },
+ {
+  "type": "bottle-openers",
+  "style": "leatherette",
+  "color": "Rawhide",
+  "vid": "gid://shopify/ProductVariant/47868577153250",
+  "qty": 1,
+  "page": "/collections/bottle-openers"
+ },
+ {
+  "type": "table-numbers",
+  "style": "tn-46",
+  "color": "White",
+  "vid": "gid://shopify/ProductVariant/47997276946658",
+  "qty": 1,
+  "page": "/collections/acrylic-table-numbers"
+ },
+ {
+  "type": "hardcover-journals",
+  "style": "custom-leatherette-hardcover-journals",
+  "color": "",
+  "vid": "gid://shopify/ProductVariant/47868613034210",
+  "qty": 1,
+  "page": "/collections/hardcover-journals"
+ },
+ {
+  "type": "coasters",
+  "style": "leatherette-coaster",
+  "color": "Light Brown",
+  "vid": "gid://shopify/ProductVariant/47868578332898",
+  "qty": 1,
+  "page": "/collections/coasters"
+ },
+ {
+  "type": "wood-keychains",
+  "style": "wk-30",
+  "color": "White Underbase",
+  "vid": "gid://shopify/ProductVariant/48285968761058",
+  "qty": 1
+ },
+ {
+  "type": "leatherette-patches",
+  "style": "small-square",
+  "color": "Ultra White (Smooth)",
+  "vid": "gid://shopify/ProductVariant/47875241705698",
+  "qty": 1,
+  "page": "/collections/custom-leatherette-patches"
+ }
 ]
