@@ -1,0 +1,61 @@
+name: Robot shopper
+
+# Every 30 min: the top products, phone + laptop, Design Center -> upload ->
+# Add to cart -> storefront cart. Nightly: the full catalog. Never checks out.
+# Public repo = free GitHub Actions minutes. The only secrets (robot cookie,
+# a send-only email key) are repo secrets, never exposed to forks.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+    - cron: '0 10 * * *'   # 3am Pacific — full catalog
+  workflow_dispatch:
+    inputs:
+      set:
+        description: core or full
+        default: core
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: robot
+  cancel-in-progress: false
+
+jobs:
+  shop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cache browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Shop
+        id: shop
+        continue-on-error: true
+        env:
+          ROBOT_TOKEN: ${{ secrets.ROBOT_TOKEN }}
+          ROBOT_SET: ${{ github.event.schedule == '0 10 * * *' && 'full' || inputs.set || 'core' }}
+        run: node robot.mjs
+      - name: Alert
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: node alert.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: out/
+          retention-days: 7
+          if-no-files-found: ignore
