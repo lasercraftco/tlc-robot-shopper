@@ -1,0 +1,175 @@
+name: Uptime
+# Moved here from lasercraftco/TLC-Headless-Shopify on 2026-09-20: public repo =
+# free Actions minutes (a 5-min schedule bills ~8,600 min/month on a private repo).
+
+# reliability-04: no external uptime monitor was ever configured, despite a
+# health endpoint (app/api/health/crons) built specifically for one — the
+# code even says so in a docblock ("Form consumed by UptimeRobot /
+# BetterUptime"). This is that monitor, at no new cost: GitHub Actions on a
+# schedule, no new account/vendor.
+#
+# Checks every 5 minutes:
+#   - https://www.thelasercraft.co/            (storefront root)
+#   - https://design.thelasercraft.co/         (design center root)
+#   - https://www.thelasercraft.co/api/health/crons?strict=1  (cron health;
+#     503 on strict means a cron is stale/failed, not just that the page
+#     renders)
+#
+# A target is DOWN if it doesn't return 200 within 8s. On any failure this
+# opens/updates a single pinned "SITE DOWN" issue (same find-by-label,
+# open/update/auto-close pattern as design-center's
+# .github/workflows/nightly-contract.yml) and, if RESEND_API_KEY is
+# configured as a repo secret, also emails hello@thelasercraft.co directly
+# (Tyler reads email; GitHub issue notifications are easy to miss). Without
+# that secret it's issue-only — see the PR for what's configured today.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ok: ${{ steps.probe.outputs.ok }}
+      summary: ${{ steps.probe.outputs.summary }}
+    steps:
+      - name: Probe endpoints
+        id: probe
+        run: |
+          set +e
+          declare -a NAMES=("storefront" "design-center" "health-crons")
+          declare -a URLS=(
+            "https://www.thelasercraft.co/"
+            "https://design.thelasercraft.co/"
+            "https://www.thelasercraft.co/api/health/crons?strict=1"
+          )
+          FAILED=0
+          SUMMARY=""
+          for i in "${!URLS[@]}"; do
+            name="${NAMES[$i]}"
+            url="${URLS[$i]}"
+            start=$(date +%s%3N)
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "$url")
+            rc=$?
+            end=$(date +%s%3N)
+            ms=$((end - start))
+            if [ $rc -ne 0 ] || [ "$code" != "200" ] || [ "$ms" -gt 8000 ]; then
+              FAILED=1
+              line="FAIL $name ($url) — http=$code curl_rc=$rc ${ms}ms"
+            else
+              line="OK   $name ($url) — http=$code ${ms}ms"
+            fi
+            echo "$line"
+            SUMMARY="${SUMMARY}${line}\n"
+          done
+          {
+            echo "summary<<EOF"
+            echo -e "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$FAILED" = "1" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  alert:
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Open, update or close the SITE DOWN issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const TITLE = 'SITE DOWN';
+            const LABEL = 'site-down';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const ok = '${{ needs.check.outputs.ok }}' === 'true';
+            const summary = `${{ needs.check.outputs.summary }}` || '(no summary captured — job likely failed before probing)';
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...context.repo, state: 'open', labels: LABEL, per_page: 10,
+            });
+            const existing = open[0];
+
+            if (ok) {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  ...context.repo, issue_number: existing.number,
+                  body: `All endpoints are back to 200 as of [this run](${runUrl}). Closing automatically.\n\n\`\`\`\n${summary}\`\`\``,
+                });
+                await github.rest.issues.update({ ...context.repo, issue_number: existing.number, state: 'closed' });
+                core.info(`Closed #${existing.number} — all green.`);
+              } else {
+                core.info('All green, no open issue. Nothing to do.');
+              }
+              return;
+            }
+
+            const body = [
+              'One or more monitored endpoints failed to return 200 within 8s.',
+              '',
+              '```',
+              summary.trim(),
+              '```',
+              '',
+              `[Full run and logs](${runUrl})`,
+              '',
+              '---',
+              '<sub>Filed and updated automatically by `.github/workflows/uptime.yml`, checking every 5 minutes.',
+              'It closes itself when every endpoint is green again, so an open issue means something is down right now.</sub>',
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: existing.number,
+                body: `Still down as of [this run](${runUrl}).\n\n\`\`\`\n${summary.trim()}\n\`\`\``,
+              });
+              core.info(`Updated #${existing.number}.`);
+            } else {
+              try {
+                await github.rest.issues.createLabel({
+                  ...context.repo, name: LABEL, color: 'b60205',
+                  description: 'Storefront / design center / health endpoint is failing uptime checks',
+                });
+              } catch (e) {
+                if (e.status !== 422) throw e;
+              }
+              const { data: created } = await github.rest.issues.create({
+                ...context.repo, title: TITLE, body, labels: [LABEL],
+              });
+              core.info(`Opened #${created.number}.`);
+            }
+            core.setFailed('Uptime check failed — see the tracking issue.');
+
+      - name: Email hello@thelasercraft.co via Resend (only if RESEND_API_KEY is configured)
+        if: needs.check.outputs.ok != 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SUMMARY: ${{ needs.check.outputs.summary }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ]; then
+            echo "RESEND_API_KEY not set as a repo secret — issue-only alert (see uptime.yml comment)."
+            exit 0
+          fi
+          BODY=$(printf 'Uptime check failed.\n\n%s\n\nSee the pinned SITE DOWN issue for details.' "$SUMMARY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+          curl -s -X POST "https://api.resend.com/emails" \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"from\":\"The Lasercraft Co. <hello@thelasercraft.co>\",\"to\":[\"hello@thelasercraft.co\"],\"subject\":\"SITE DOWN\",\"text\":$BODY}" \
+            -o /dev/null -w "resend http=%{http_code}\n"
