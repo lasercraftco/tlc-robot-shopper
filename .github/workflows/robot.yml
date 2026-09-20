@@ -46,7 +46,7 @@ jobs:
         continue-on-error: true
         env:
           ROBOT_TOKEN: ${{ secrets.ROBOT_TOKEN }}
-          ROBOT_CONCURRENCY: 2
+          ROBOT_CONCURRENCY: 4
           ROBOT_SET: ${{ github.event.schedule == '0 10 * * *' && 'full' || inputs.set || 'core' }}
         run: node robot.mjs
       - name: Alert

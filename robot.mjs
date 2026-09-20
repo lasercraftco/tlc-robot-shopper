@@ -34,8 +34,12 @@ const SCENARIOS = [
   { entry: 'direct', file: 'art.heic' },
 ];
 const pickScenario = (pi, dev) => {
-  if (process.env.ROBOT_SCENARIO) return SCENARIOS[Number(process.env.ROBOT_SCENARIO)];
-  return SCENARIOS[(RUN_INDEX + pi * 3 + (dev === 'phone' ? 1 : 0)) % SCENARIOS.length];
+  const sc = process.env.ROBOT_SCENARIO ? SCENARIOS[Number(process.env.ROBOT_SCENARIO)]
+    : SCENARIOS[(RUN_INDEX + pi * 3 + (dev === 'phone' ? 1 : 0)) % SCENARIOS.length];
+  // 2-sided runs on the laptop only: on the phone the sides toggle sits in a
+  // collapsible sheet the robot can't drive reliably, and a half-done 2-sided
+  // setup reads as a false outage.
+  return dev === 'phone' && sc.sides === 2 ? { ...sc, sides: 1 } : sc;
 };
 
 // Only our own sites + what they need to render. Every ad/analytics pixel,
