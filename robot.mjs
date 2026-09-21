@@ -81,6 +81,74 @@ async function enterFromPage(page, p) {
   throw new Error(`no working "design" button on ${p.page}`);
 }
 
+// A Shopify checkout page, not an error page or a bounce back to the cart.
+const CHECKOUT_ERROR = /something went wrong|there was a problem|out of stock|no longer available|this (invoice|checkout) (is|has) (expired|no longer)|page not found/i;
+async function assertCheckoutPage(page) {
+  if (!/\/checkouts?\//.test(new URL(page.url()).pathname)) throw new Error(`not a checkout URL: ${page.url().replace(/[?#].*/, '').slice(0, 120)}`);
+  const text = await page.locator('body').innerText().catch(() => '');
+  const err = text.match(CHECKOUT_ERROR);
+  if (err) throw new Error(`checkout error: ${text.slice(err.index, err.index + 120).split('\n')[0]}`);
+  if (!/(contact|delivery|shipping|payment|pay now|order summary|express checkout)/i.test(text)) {
+    throw new Error('checkout URL loaded but the page has no checkout form');
+  }
+}
+
+// Daily (nightly full run, or ROBOT_BULK_QUOTE=1): the internal test bulk
+// quote BQ-ROBOTPAY. POST its /pay link exactly as the customer's "Check out
+// now" button does — for that quote the server re-runs the catalogue rebuild
+// + Shopify draftOrderUpdate every time, which fails if any variant id has
+// gone stale (Sep 18: ~29 failed pays) — then load the Shopify invoice
+// checkout it redirects to. Never pays. The quote has no email on it, so
+// nothing about this check can reach a customer.
+const BQ_TOKEN = process.env.ROBOT_BULK_QUOTE_TOKEN || '';
+const BULK_QUOTE = !!BQ_TOKEN && (process.env.ROBOT_BULK_QUOTE === '1' || (SET === 'full' && !ONLY));
+async function bulkQuotePayOnce(browsers) {
+  const res = { product: 'bulk-quote-pay', device: 'laptop', scenario: { entry: 'pay', file: 'BQ-ROBOTPAY' }, ok: false, step: '', detail: '', ms: 0, prices: {}, daily: true };
+  const t0 = Date.now();
+  let step = 'POST /pay';
+  const ctx = await browsers.chromium.newContext({ viewport: { width: 1366, height: 768 } });
+  try {
+    const r = await fetch(`${STORE}/api/bulk-quote/${encodeURIComponent(BQ_TOKEN)}/pay`, {
+      method: 'POST', redirect: 'manual', headers: { 'user-agent': 'tlc-robot-shopper/1.0 (bot; synthetic monitor)' },
+    });
+    const loc = r.headers.get('location') || '';
+    if (r.status !== 303 || !loc) throw new Error(`pay returned HTTP ${r.status}${loc ? ` → ${loc.slice(0, 120)}` : ''}`);
+    if (/payError=([^&]+)/.test(loc)) throw new Error(`pay refused: payError=${loc.match(/payError=([^&]+)/)[1]} (stale variant ids / Shopify draft error — see Vercel logs for bulk-quote-convert)`);
+    if (/\/bulk-orders\?/.test(loc)) throw new Error(`pay bounced to the quote page: ${loc.replace(/quote=[^&]+/, 'quote=…').slice(0, 120)}`);
+    step = 'invoice → Shopify checkout loads';
+    await ctx.route('**/*', (route) => {
+      const u = new URL(route.request().url());
+      if (u.protocol === 'data:' || u.protocol === 'blob:') return route.continue();
+      if (!ALLOW_HOSTS.some((re) => re.test(u.hostname)) || BLOCK_PATHS.test(u.pathname)) return route.abort();
+      return route.continue();
+    });
+    const page = await ctx.newPage();
+    const resp = await page.goto(loc, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    if (!resp || resp.status() !== 200) throw new Error(`invoice checkout HTTP ${resp?.status()}`);
+    await page.waitForTimeout(3000);
+    await assertCheckoutPage(page);
+    const amounts = allMoney(await page.locator('body').innerText());
+    res.prices.checkout = amounts.length ? Math.max(...amounts) : null;
+    if (res.prices.checkout === 0) throw new Error('invoice checkout total is $0.00');
+    res.ok = true;
+  } catch (e) {
+    res.step = step;
+    res.detail = String(e.message || e).split('\n')[0].slice(0, 300);
+    const pages = ctx.pages();
+    if (pages.length) await pages[0].screenshot({ path: `${OUT}/bulk-quote-pay.png` }).catch(() => {});
+  }
+  res.ms = Date.now() - t0;
+  await ctx.close();
+  return res;
+}
+async function bulkQuotePay(browsers) {
+  const first = await bulkQuotePayOnce(browsers);
+  if (first.ok) return first;
+  const second = await bulkQuotePayOnce(browsers);
+  if (second.ok) return { ...second, flaky: `${first.step}: ${first.detail}` };
+  return second;
+}
+
 async function runOne(browsers, p, pi, dev) {
   const sc = pickScenario(pi, dev);
   const t0 = Date.now();
@@ -199,9 +267,18 @@ async function runOne(browsers, p, pi, dev) {
 
     if (CHECKOUT) {
       step = 'Shopify checkout loads';
+      // The checkout document itself must answer 200 (redirect hops skipped),
+      // not merely change the URL — a 4xx/5xx checkout page is still a URL.
+      const coDoc = page.waitForResponse((r) => r.request().isNavigationRequest() && r.frame() === page.mainFrame()
+        && /\/checkouts?\//.test(new URL(r.url()).pathname) && (r.status() < 300 || r.status() >= 400), { timeout: 45000 }).catch(() => null);
       await Promise.all([page.waitForURL(/checkouts?\//, { timeout: 45000 }), checkout.click()]);
+      const coResp = await coDoc;
+      if (!coResp) throw new Error('checkout URL reached but the checkout document never answered');
+      if (coResp.status() !== 200) throw new Error(`checkout page HTTP ${coResp.status()}`);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(3000);
+      await assertCheckoutPage(page);
+      res.checkout = 'loaded';
       // Phones collapse the order summary and show a tax-inclusive total; open it.
       const toggle = page.getByRole('button', { name: /order summary/i }).first();
       if (await toggle.isVisible().catch(() => false)) { await toggle.click().catch(() => {}); await page.waitForTimeout(1200); }
@@ -248,6 +325,9 @@ for (const f of results.filter((r) => !r.ok)) {
   if (r2.ok) { f.ok = true; f.flaky = `${f.step}: ${f.detail}`; console.log(`RETRY-PASS ${f.product} ${f.device}`); }
   else { Object.assign(f, { step: r2.step, detail: r2.detail }); console.log(`RETRY-FAIL ${f.product} ${f.device} — ${r2.step}: ${r2.detail}`); }
 }
+// After the product retries on purpose: bulkQuotePay does its own retry.
+if (BULK_QUOTE) { const r = await bulkQuotePay(browsers); results.push(r); console.log(fmt(r)); }
+else if (SET === 'full' && !BQ_TOKEN) console.log('bulk-quote pay check skipped: ROBOT_BULK_QUOTE_TOKEN not set');
 await browsers.chromium.close(); await browsers.webkit?.close();
 fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(results, null, 2));
 const failed = results.filter((r) => !r.ok);

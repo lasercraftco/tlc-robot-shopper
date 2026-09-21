@@ -1,7 +1,8 @@
 name: Robot shopper
 
 # Every 30 min: the top products, phone + laptop, Design Center -> upload ->
-# Add to cart -> storefront cart. Nightly: the full catalog. Never checks out.
+# Add to cart -> storefront cart -> Shopify checkout loads (HTTP 200, never
+# pays). Nightly: the full catalog + the bulk-quote /pay check.
 # Public repo = free GitHub Actions minutes. The only secrets (robot cookie,
 # a send-only email key) are repo secrets, never exposed to forks.
 on:
@@ -13,6 +14,10 @@ on:
       set:
         description: core or full
         default: core
+      bulk_quote:
+        description: also run the daily bulk-quote pay check
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,6 +53,9 @@ jobs:
           ROBOT_TOKEN: ${{ secrets.ROBOT_TOKEN }}
           ROBOT_CONCURRENCY: 4
           ROBOT_SET: ${{ github.event.schedule == '0 10 * * *' && 'full' || inputs.set || 'core' }}
+          # Daily bulk-quote pay check rides the nightly full run (no new job).
+          ROBOT_BULK_QUOTE_TOKEN: ${{ secrets.ROBOT_BULK_QUOTE_TOKEN }}
+          ROBOT_BULK_QUOTE: ${{ inputs.bulk_quote && '1' || '' }}
         run: node robot.mjs
       - name: Alert
         if: always()
