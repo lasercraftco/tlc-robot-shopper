@@ -2,8 +2,16 @@
 
 Synthetic checkout monitor for thelasercraft.co. Every 30 minutes it takes the
 top products through the Design Center on a phone and a laptop, uploads art,
-taps Add to cart and confirms the storefront cart loads with the item. The full
-catalog runs nightly. It never reaches Shopify checkout and never places an order.
+taps Add to cart, confirms the storefront cart loads with the item, then clicks
+Checkout and requires the Shopify checkout page to answer HTTP 200 with a
+checkout form and the cart's subtotal. The full catalog runs nightly, plus the
+**bulk-quote pay check**: it POSTs `/api/bulk-quote/<token>/pay` for the internal
+test quote `BQ-ROBOTPAY` (no email on it; token in the `ROBOT_BULK_QUOTE_TOKEN`
+secret). The server re-runs the catalogue rebuild + Shopify draft-order update,
+which fails if the quote's variant ids have gone stale, and the robot loads the
+Shopify invoice checkout it redirects to. It never pays or places an order.
+Failures there alert right away (it has already retried once in-run), and stay
+open until the next nightly run passes.
 
 - Identifies itself with a `tlc_robot` cookie so its designs are auto-deleted
   and its clicks are excluded from analytics (design-center `src/lib/robot-shopper.ts`).

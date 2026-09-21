@@ -56,7 +56,11 @@ fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY || '/dev/null', lines.join('\n
 const watch = issue('robot-watch');
 const prev = sigOf(watch?.body);
 const now = new Set(failed.map(id));
-const confirmed = failed.filter((f) => prev.has(id(f)));
+// Daily checks (r.daily, e.g. bulk-quote-pay) run once a day and already
+// retried in-run — waiting for "two runs in a row" would mean a day's delay,
+// so they confirm on their own.
+const confirmed = failed.filter((f) => f.daily || prev.has(id(f)));
+const checked = new Set(results.map(id));
 if (now.size) {
   writeBody(`<!-- sig:${[...now].join(',')} -->\nFailed this run (not yet confirmed — alerts only if the same check fails next run too):\n\n${lines.join('\n')}\n\n${runUrl}`);
   if (watch) sh(`gh issue edit ${watch.number} --body-file /tmp/body.md`);
@@ -65,9 +69,12 @@ if (now.size) {
 
 // 2. Confirmed outage.
 const down = issue('robot-down');
+// A confirmed failure of a check this run did NOT perform (a daily check,
+// between its runs) is still an outage: it is carried, never "recovered".
+const carried = down ? [...sigOf(down.body)].filter((s) => !checked.has(s)) : [];
 if (confirmed.length) {
-  const sig = confirmed.map(id).sort().join(',');
-  writeBody(`<!-- sig:${sig} -->\nFailed two runs in a row:\n\n${confirmed.map((f) => `- **${id(f)}** at *${f.step}*: ${f.detail}`).join('\n')}\n\nScreenshots: ${runUrl} (artifacts)\n\nLast checked: ${new Date().toISOString()}`);
+  const sig = [...new Set([...confirmed.map(id), ...carried])].sort().join(',');
+  writeBody(`<!-- sig:${sig} -->\nFailed two runs in a row (daily checks: failed after an in-run retry):\n\n${confirmed.map((f) => `- **${id(f)}** at *${f.step}*: ${f.detail}`).join('\n')}${carried.length ? `\n\nStill failing, not rechecked this run: ${carried.join(', ')}` : ''}\n\nScreenshots: ${runUrl} (artifacts)\n\nLast checked: ${new Date().toISOString()}`);
   const products = [...new Set(confirmed.map((f) => f.product))].join(', ');
   if (!down) {
     sh(`gh issue create --title "Robot shopper: shoppers can't reach the cart" --label robot-down --body-file /tmp/body.md`);
@@ -79,7 +86,7 @@ if (confirmed.length) {
     sh(`gh issue edit ${down.number} --body-file /tmp/body.md`);
     if (prevSig !== sig) await email('Checkout still broken (changed)', `<ul>${confirmed.map((f) => `<li>${esc(id(f))}: ${esc(f.step)} — ${esc(f.detail)}</li>`).join('')}</ul><p><a href="${runUrl}">Run</a></p>`);
   }
-} else if (down && !failed.some((f) => sigOf(down.body).has(id(f)))) {
+} else if (down && !carried.length && !failed.some((f) => sigOf(down.body).has(id(f)))) {
   sh(`gh issue close ${down.number} --comment "All clear. ${runUrl}"`);
   await email('✅ Checkout recovered', `<p>The robot shopper's checks pass again.</p><p><a href="${runUrl}">Run</a></p>`);
 }
