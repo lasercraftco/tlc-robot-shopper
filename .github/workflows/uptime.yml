@@ -15,7 +15,17 @@ name: Uptime
 #     503 on strict means a cron is stale/failed, not just that the page
 #     renders)
 #
-# A target is DOWN if it doesn't return 200 within 8s. On any failure this
+# PRIMARY MONITOR IS NOW SUPABASE (2026-09-21). GitHub scheduled workflows are
+# best-effort: this */5 schedule actually ran at 01:33, 07:00, 13:46, 18:54 UTC
+# on 2026-09-21. Every-5-minute monitoring with transition-only email alerts
+# now runs from pg_cron in Supabase (edge function `uptime-monitor`, tables
+# ops_uptime_*, in lasercraftco/TLC-Headless-Shopify). This workflow stays as an
+# independent second opinion and GitHub-issue tracker.
+#
+# A target is DOWN if it doesn't return 200 within its timeout (20s for the
+# site roots, 25s for health-crons, which normally takes ~5-6s) on two
+# attempts 20s apart. The 18:54 run above used a single 8s attempt, timed out
+# on health-crons and opened a false SITE DOWN. On any failure this
 # opens/updates a single pinned "SITE DOWN" issue (same find-by-label,
 # open/update/auto-close pattern as design-center's
 # .github/workflows/nightly-contract.yml) and, if RESEND_API_KEY is
@@ -49,6 +59,7 @@ jobs:
         run: |
           set +e
           declare -a NAMES=("storefront" "design-center" "health-crons")
+          declare -a TIMEOUTS=(20 20 25)
           declare -a URLS=(
             "https://www.thelasercraft.co/"
             "https://design.thelasercraft.co/"
@@ -59,12 +70,19 @@ jobs:
           for i in "${!URLS[@]}"; do
             name="${NAMES[$i]}"
             url="${URLS[$i]}"
-            start=$(date +%s%3N)
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "$url")
-            rc=$?
-            end=$(date +%s%3N)
-            ms=$((end - start))
-            if [ $rc -ne 0 ] || [ "$code" != "200" ] || [ "$ms" -gt 8000 ]; then
+            max="${TIMEOUTS[$i]}"
+            for attempt in 1 2; do
+              start=$(date +%s%3N)
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$max" -H "Cache-Control: no-cache" "$url")
+              rc=$?
+              end=$(date +%s%3N)
+              ms=$((end - start))
+              if [ $rc -eq 0 ] && [ "$code" = "200" ]; then break; fi
+              # One recheck before calling it down: a single slow response is
+              # not an outage.
+              [ $attempt -eq 1 ] && sleep 20
+            done
+            if [ $rc -ne 0 ] || [ "$code" != "200" ]; then
               FAILED=1
               line="FAIL $name ($url) — http=$code curl_rc=$rc ${ms}ms"
             else
@@ -99,6 +117,13 @@ jobs:
             const TITLE = 'SITE DOWN';
             const LABEL = 'site-down';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const checkResult = '${{ needs.check.result }}';
+            // A cancelled/skipped probe (e.g. superseded by the next run via
+            // `concurrency`) says nothing about the site. Never open an issue for it.
+            if (checkResult !== 'success' && checkResult !== 'failure') {
+              core.info(`check job ${checkResult}; not touching the issue.`);
+              return;
+            }
             const ok = '${{ needs.check.outputs.ok }}' === 'true';
             const summary = `${{ needs.check.outputs.summary }}` || '(no summary captured — job likely failed before probing)';
 
@@ -122,7 +147,7 @@ jobs:
             }
 
             const body = [
-              'One or more monitored endpoints failed to return 200 within 8s.',
+              'One or more monitored endpoints failed to return 200 on two attempts 20s apart (timeout 20s, 25s for health-crons).',
               '',
               '```',
               summary.trim(),
