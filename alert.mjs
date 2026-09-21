@@ -31,6 +31,13 @@ async function email(subject, html) {
   console.log('email', r.status);
 }
 async function page(title, message) {
+  const topic = process.env.NTFY_TOPIC;
+  if (topic) {
+    const r = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: 'POST',
+      headers: { Title: title.slice(0, 200), Priority: 'urgent', Tags: 'rotating_light', Click: runUrl },
+      body: message.slice(0, 1000) });
+    console.log('ntfy', r.status);
+  }
   const token = process.env.PUSHOVER_APP_TOKEN, user = process.env.PUSHOVER_USER_KEY;
   if (!token || !user) return;
   const r = await fetch('https://api.pushover.net/1/messages.json', { method: 'POST',

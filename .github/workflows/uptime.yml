@@ -165,10 +165,14 @@ jobs:
       - name: Page phone (storefront or design center down)
         if: always() && needs.check.outputs.ok != 'true' && steps.issue.outputs.newly == 'true' && (contains(needs.check.outputs.summary, 'FAIL storefront') || contains(needs.check.outputs.summary, 'FAIL design-center'))
         env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           PUSHOVER_APP_TOKEN: ${{ secrets.PUSHOVER_APP_TOKEN }}
           PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
           SUMMARY: ${{ needs.check.outputs.summary }}
         run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -s -o /dev/null -w "ntfy http=%{http_code}\n" -H "Title: SITE DOWN" -H "Priority: urgent" -H "Tags: rotating_light" -d "$SUMMARY" "https://ntfy.sh/$NTFY_TOPIC"
+          fi
           [ -z "$PUSHOVER_APP_TOKEN" ] && { echo "no pushover secrets"; exit 0; }
           curl -s -o /dev/null -w "pushover http=%{http_code}\n" https://api.pushover.net/1/messages.json \
             --form-string "token=$PUSHOVER_APP_TOKEN" --form-string "user=$PUSHOVER_USER_KEY" \
