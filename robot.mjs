@@ -57,6 +57,27 @@ const BLOCK_PATHS = /\/api\/(funnel|meta-capi|analytics|track|events|clientlog)|
 const money = (s) => { const m = String(s).replace(/,/g, '').match(/\$\s?(\d+(?:\.\d{2})?)/); return m ? Math.round(parseFloat(m[1]) * 100) : null; };
 const allMoney = (s) => [...String(s).replace(/,/g, '').matchAll(/\$\s?(\d+\.\d{2})/g)].map((m) => Math.round(parseFloat(m[1]) * 100));
 
+// Uploads can raise REQUIRED choices that lock the buy button until answered —
+// shoppers must answer them too. Contour products: how to cut a solid-background
+// photo. Engraved products (DC #493): engrave just the artwork or the whole
+// rectangle. The robot always picks "keep as-is". Detection is async, so poll
+// until the button unlocks instead of a one-shot wait.
+const REQUIRED_CHOICES = ['contour-bg-keep', 'engrave-bg-keep'];
+async function answerRequiredChoices(page, cta, timeout = 45000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    for (const id of REQUIRED_CHOICES) {
+      const b = page.locator(`[data-testid=${id}]`).first();
+      if (await b.isVisible().catch(() => false)) await b.click({ timeout: 5000 }).catch(() => {});
+    }
+    if (await cta.isEnabled().catch(() => false)) return;
+    await page.waitForTimeout(500);
+  }
+  const pending = [];
+  for (const id of ['contour-bg-decision', 'engrave-bg-decision']) if (await page.locator(`[data-testid=${id}]`).first().isVisible().catch(() => false)) pending.push(id);
+  throw new Error(`buy button still locked after ${timeout / 1000}s${pending.length ? ` (unanswered: ${pending.join(', ')})` : ''}`);
+}
+
 function dcUrl(p) {
   const q = new URLSearchParams({ source: 'shopify', variant: p.style, lock: '1', variantId: p.vid, qty: String(p.qty),
     returnUrl: `${STORE}/cart/design-return` });
@@ -183,11 +204,7 @@ async function runOne(browsers, p, pi, dev) {
     await fileInput.setInputFiles(here(sc.file));
     const cta = page.getByRole('button', { name: /(add (order )?to cart|approve)/i }).first();
     await cta.waitFor({ state: 'visible', timeout: 45000 });
-    // Contour products ask how to cut a photo with a solid background — a
-    // required choice for shoppers too. Pick "cut the whole image".
-    const keep = page.locator('[data-testid=contour-bg-keep]');
-    await keep.waitFor({ state: 'visible', timeout: 8000 }).then(() => keep.click()).catch(() => {});
-    await page.waitForFunction((el) => !el.disabled, await cta.elementHandle(), { timeout: 45000 });
+    await answerRequiredChoices(page, cta);
 
     if (sc.sides === 2) {
       // Laptop: a failure here is a real failure. Phone: the sides toggle sits
@@ -217,6 +234,7 @@ async function runOne(browsers, p, pi, dev) {
           step = '2-sided: upload back';
           await page.locator('input[type=file]').first().setInputFiles(here(sc.file));
           await page.waitForTimeout(2500);
+          await answerRequiredChoices(page, cta);
           res.twoSided = true;
         } else res.twoSided = 'n/a';
 
