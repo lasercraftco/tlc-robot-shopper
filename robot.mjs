@@ -256,8 +256,17 @@ async function runOne(browsers, p, pi, dev) {
         page.waitForURL((u) => u.hostname === 'www.thelasercraft.co', { timeout: 90000 }).then(() => 'left'),
         page.locator('[data-testid=editor-notice]').first().waitFor({ state: 'visible', timeout: 90000 }).then(() => 'notice'),
         page.locator('[data-testid=oob-confirm]').waitFor({ state: 'visible', timeout: 90000 }).then(() => 'oob'),
+        page.locator('[data-testid=blank-side-confirm]').waitFor({ state: 'visible', timeout: 90000 }).then(() => 'blank'),
       ]).catch(() => 'timeout');
       if (outcome === 'left') { res.submitMs = Date.now() - tClick; break; }
+      // DC blank-side gate (2 sides chosen, side 2 empty): answer it like a buyer would —
+      // print 1 side when offered, else put the same design on both sides.
+      if (outcome === 'blank') {
+        const one = page.locator('[data-testid=blank-side-one]');
+        if (await one.count()) await one.click(); else await page.locator('[data-testid=blank-side-mirror]').click();
+        res.blankSide = (await one.count()) ? 'answered: 1 side' : 'answered: mirror';
+        continue;
+      }
       if (outcome === 'oob') { await page.getByRole('button', { name: /submit anyway/i }).click(); continue; }
       if (outcome === 'notice') {
         const msg = (await page.locator('[data-testid=editor-notice]').first().innerText()).trim();
