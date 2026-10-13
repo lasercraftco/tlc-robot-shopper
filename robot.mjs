@@ -263,8 +263,9 @@ async function runOne(browsers, p, pi, dev) {
       // print 1 side when offered, else put the same design on both sides.
       if (outcome === 'blank') {
         const one = page.locator('[data-testid=blank-side-one]');
-        if (await one.count()) await one.click(); else await page.locator('[data-testid=blank-side-mirror]').click();
-        res.blankSide = (await one.count()) ? 'answered: 1 side' : 'answered: mirror';
+        const hasOne = (await one.count()) > 0;
+        if (hasOne) await one.click(); else await page.locator('[data-testid=blank-side-mirror]').click();
+        res.blankSide = hasOne ? 'answered: 1 side' : 'answered: mirror';
         continue;
       }
       if (outcome === 'oob') { await page.getByRole('button', { name: /submit anyway/i }).click(); continue; }
