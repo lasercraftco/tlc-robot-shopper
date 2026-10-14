@@ -13,6 +13,12 @@ const BYPASS = process.env.ROBOT_BYPASS || '';
 const STORE = 'https://www.thelasercraft.co';
 const TOKEN = process.env.ROBOT_TOKEN || '';
 console.log(`robot cookie: ${TOKEN ? 'set (' + TOKEN.length + ' chars)' : 'MISSING — designs will not be tagged or cleaned up'}`);
+// Without the cookie every design this run saves lands in production as a
+// real customer design and is never cleaned up. Refuse rather than pollute.
+if (!TOKEN && process.env.ROBOT_ALLOW_UNTAGGED !== '1') {
+  console.error('ROBOT_TOKEN is not set; refusing to run (set ROBOT_ALLOW_UNTAGGED=1 to override).');
+  process.exit(2);
+}
 const SET = process.env.ROBOT_SET || 'core';           // core | full
 const ONLY = process.env.ROBOT_ONLY ? process.env.ROBOT_ONLY.split(',') : null;
 const DEVICES = (process.env.ROBOT_DEVICES || 'phone,laptop').split(',');
@@ -176,8 +182,13 @@ async function runOne(browsers, p, pi, dev) {
   const res = { product: p.type, device: dev, scenario: sc, ok: false, step: '', detail: '', ms: 0, prices: {} };
   const browser = dev === 'phone' ? browsers.webkit : browsers.chromium;
   const ctx = await browser.newContext(dev === 'phone' ? { ...devices['iPhone 13'] } : { viewport: { width: 1366, height: 768 } });
-  if (TOKEN) await ctx.addCookies([{ name: 'tlc_robot', value: TOKEN, domain: 'design.thelasercraft.co', path: '/', secure: true, sameSite: 'Lax' }]);
   const dcHost = new URL(DC).hostname;
+  // The cookie must go to whichever Design Center this run is shopping. It was
+  // pinned to design.thelasercraft.co, so preview runs (ROBOT_DC_BASE = a
+  // vercel.app URL) never sent it: their designs were saved untagged, skipped
+  // by robot-cleanup, and counted as real customer designs (~2,800 rows
+  // Sep 18 - Oct 13, which broke the admin design-volume alarm).
+  if (TOKEN) await ctx.addCookies([{ name: 'tlc_robot', value: TOKEN, domain: dcHost, path: '/', secure: true, sameSite: 'Lax' }]);
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url());
     if (u.protocol === 'data:' || u.protocol === 'blob:') return route.continue();
