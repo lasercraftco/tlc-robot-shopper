@@ -48,7 +48,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       ok: ${{ steps.probe.outputs.ok }}
@@ -83,8 +83,16 @@ jobs:
               [ $attempt -eq 1 ] && sleep 20
             done
             if [ $rc -ne 0 ] || [ "$code" != "200" ]; then
-              FAILED=1
-              line="FAIL $name ($url) — http=$code curl_rc=$rc ${ms}ms"
+              # A failed background job is not a site outage. The Supabase
+              # monitor already sends one transition email for it; failing
+              # this workflow every 5 min until the job's next run just floods
+              # the inbox. Only the site roots count as DOWN here.
+              if [ "$name" = "health-crons" ] && [ "$code" = "503" ]; then
+                line="WARN $name ($url) — http=$code (a background job is stale/failed; see ops digest)"
+              else
+                FAILED=1
+                line="FAIL $name ($url) — http=$code curl_rc=$rc ${ms}ms"
+              fi
             else
               line="OK   $name ($url) — http=$code ${ms}ms"
             fi
@@ -106,7 +114,7 @@ jobs:
   alert:
     needs: check
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Open, update or close the SITE DOWN issue

@@ -8,6 +8,11 @@
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
+if (!fs.existsSync('out/results.json')) {
+  // The shop step never produced results (setup/infra failure, not a site failure).
+  console.log('No out/results.json - the run failed before shopping (runner/setup). Not a site problem; no alert sent.');
+  process.exit(0);
+}
 const results = JSON.parse(fs.readFileSync('out/results.json', 'utf8'));
 const failed = results.filter((r) => !r.ok);
 const flaky = results.filter((r) => r.flaky);
