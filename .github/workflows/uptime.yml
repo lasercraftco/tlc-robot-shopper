@@ -48,7 +48,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       ok: ${{ steps.probe.outputs.ok }}
@@ -106,7 +106,7 @@ jobs:
   alert:
     needs: check
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Open, update or close the SITE DOWN issue
